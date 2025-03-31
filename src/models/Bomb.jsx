@@ -1,16 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { useTexture } from '@react-three/drei';
 import { gsap } from 'gsap';
 
 export function Bomb({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
   const bombRef = useRef();
-  const [metalTexture, normalMap, roughnessMap] = useTexture([
-    '/textures/metal.jpg',
-    '/textures/metal_normal.jpg',
-    '/textures/metal_roughness.jpg'
-  ]);
 
   // Animation de pulsation
   useEffect(() => {
@@ -32,12 +26,9 @@ export function Bomb({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) 
       <mesh>
         <cylinderGeometry args={[1, 1, 2, 32]} />
         <meshStandardMaterial
-          map={metalTexture}
-          normalMap={normalMap}
-          roughnessMap={roughnessMap}
+          color="#2a2a2a"
           metalness={0.8}
           roughness={0.2}
-          color="#2a2a2a"
         />
       </mesh>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, Environment, PerspectiveCamera, AccumulativeShadows } from '@react-three/drei';
 import { Bomb } from '../models/Bomb';
 import { useGame } from '../context/GameContext';
 import '../styles/BombView.css';
@@ -67,7 +67,7 @@ function BombView() {
       <div className="canvas-container">
         <Canvas
           shadows
-          camera={{ position: [0, 0, 5], fov: 75 }}
+          camera={{ position: [0, 2, 5], fov: 75 }}
           style={{ background: '#1a1a1a' }}
         >
           <PerspectiveCamera makeDefault />
@@ -79,11 +79,23 @@ function BombView() {
             position={[5, 5, 5]}
             intensity={1}
             castShadow
+            shadow-mapSize={[1024, 1024]}
+            shadow-camera-far={50}
+            shadow-camera-left={-10}
+            shadow-camera-right={10}
+            shadow-camera-top={10}
+            shadow-camera-bottom={-10}
           />
           <pointLight position={[-5, -5, -5]} intensity={0.5} />
 
           {/* Environnement */}
           <Environment preset="warehouse" />
+
+          {/* Sol */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
+            <planeGeometry args={[20, 20]} />
+            <meshStandardMaterial color="#333333" />
+          </mesh>
 
           {/* Bombe */}
           <Bomb position={[0, 0, 0]} scale={1} />
