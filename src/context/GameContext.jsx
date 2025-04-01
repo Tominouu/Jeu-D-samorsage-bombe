@@ -6,10 +6,12 @@ const GameContext = createContext();
 export function GameProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState({
-    timeLeft: 300, // 5 minutes en secondes
+    timeLeft: 300,
     modules: [],
     isGameActive: false,
-    role: null
+    role: null,
+    gameStatus: 'waiting', // waiting, playing, won, lost
+    errorMessage: null
   });
 
   useEffect(() => {
@@ -44,8 +46,102 @@ export function GameProvider({ children }) {
   const startGame = () => {
     if (socket) {
       const modules = generateModules();
-      updateBombState({ modules, timeLeft: 300 });
+      updateBombState({ 
+        modules, 
+        timeLeft: 300,
+        gameStatus: 'playing',
+        errorMessage: null
+      });
     }
+  };
+
+  const checkModuleSolution = (module) => {
+    switch (module.type) {
+      case 'Fils':
+        return module.state.wires.every(wire => wire.isCut === shouldCutWire(wire, gameState));
+      case 'Bouton':
+        return module.state.isPressed && checkButtonRelease(module);
+      case 'Code':
+        return module.state.enteredCode === module.state.code;
+      default:
+        return false;
+    }
+  };
+
+  const shouldCutWire = (wire, gameState) => {
+    const lastDigit = gameState.timeLeft % 10;
+    const wireCount = gameState.modules
+      .filter(m => m.type === 'Fils')
+      .reduce((acc, m) => acc + m.state.wires.length, 0);
+
+    switch (wire.color) {
+      case 'red':
+        return lastDigit % 2 === 1;
+      case 'blue':
+        return wireCount > 3;
+      case 'yellow':
+        return gameState.timeLeft < 60;
+      case 'green':
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  const checkButtonRelease = (module) => {
+    const timeLeft = gameState.timeLeft;
+    const colorMultiplier = {
+      red: 2,
+      blue: 3,
+      green: 4,
+      yellow: 5
+    }[module.state.lightColor];
+
+    return timeLeft % colorMultiplier === 0;
+  };
+
+  const handleModuleAction = (moduleId, action) => {
+    const updatedModules = gameState.modules.map(module => {
+      if (module.id === moduleId) {
+        const newState = {
+          ...module.state,
+          ...action
+        };
+
+        // Vérifier si le module est résolu
+        if (checkModuleSolution({ ...module, state: newState })) {
+          return {
+            ...module,
+            state: newState,
+            isSolved: true
+          };
+        }
+
+        return {
+          ...module,
+          state: newState
+        };
+      }
+      return module;
+    });
+
+    // Vérifier si tous les modules sont résolus
+    const allSolved = updatedModules.every(module => module.isSolved);
+    if (allSolved) {
+      updateBombState({ 
+        modules: updatedModules,
+        gameStatus: 'won'
+      });
+    } else {
+      updateBombState({ modules: updatedModules });
+    }
+  };
+
+  const handleGameOver = () => {
+    updateBombState({ 
+      gameStatus: 'lost',
+      errorMessage: 'Temps écoulé !'
+    });
   };
 
   const generateModules = () => {
@@ -98,7 +194,9 @@ export function GameProvider({ children }) {
       socket,
       joinGame,
       updateBombState,
-      startGame
+      startGame,
+      handleModuleAction,
+      handleGameOver
     }}>
       {children}
     </GameContext.Provider>

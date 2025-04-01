@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, PerspectiveCamera, AccumulativeShadows } from '@react-three/drei';
+import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
 import { Bomb } from '../models/Bomb';
 import { useGame } from '../context/GameContext';
 import '../styles/BombView.css';
 
 function BombView() {
-  const { gameState, updateBombState } = useGame();
+  const { gameState, updateBombState, handleModuleAction, handleGameOver } = useGame();
   const [selectedModule, setSelectedModule] = useState(null);
   const [timer, setTimer] = useState(300);
 
   // Gestion du timer
   useEffect(() => {
-    if (gameState.isGameActive && timer > 0) {
+    if (gameState.isGameActive && timer > 0 && gameState.gameStatus === 'playing') {
       const interval = setInterval(() => {
         setTimer(prev => {
           if (prev <= 1) {
             clearInterval(interval);
-            // Game Over
+            handleGameOver();
             return 0;
           }
           return prev - 1;
@@ -26,7 +26,7 @@ function BombView() {
 
       return () => clearInterval(interval);
     }
-  }, [gameState.isGameActive, timer]);
+  }, [gameState.isGameActive, timer, gameState.gameStatus, handleGameOver]);
 
   // Mise à jour de l'état du jeu
   useEffect(() => {
@@ -37,23 +37,28 @@ function BombView() {
     setSelectedModule(module);
   };
 
-  const handleModuleAction = (action) => {
+  const handleWireCut = (wireIndex) => {
     if (!selectedModule) return;
-
-    const updatedModules = gameState.modules.map(module => {
-      if (module.id === selectedModule.id) {
-        return {
-          ...module,
-          state: {
-            ...module.state,
-            ...action
-          }
-        };
-      }
-      return module;
+    handleModuleAction(selectedModule.id, {
+      wires: selectedModule.state.wires.map((w, i) => 
+        i === wireIndex ? { ...w, isCut: true } : w
+      )
     });
+  };
 
-    updateBombState({ modules: updatedModules });
+  const handleButtonPress = () => {
+    if (!selectedModule) return;
+    handleModuleAction(selectedModule.id, { isPressed: true });
+  };
+
+  const handleButtonRelease = () => {
+    if (!selectedModule) return;
+    handleModuleAction(selectedModule.id, { isPressed: false });
+  };
+
+  const handleCodeInput = (value) => {
+    if (!selectedModule) return;
+    handleModuleAction(selectedModule.id, { enteredCode: value });
   };
 
   const formatTime = (seconds) => {
@@ -106,55 +111,73 @@ function BombView() {
       </div>
 
       <div className="ui-overlay">
-        <div className="timer">Temps restant: {formatTime(timer)}</div>
-        <div className="modules">
-          {gameState.modules.map(module => (
-            <div
-              key={module.id}
-              className={`module ${selectedModule?.id === module.id ? 'selected' : ''}`}
-              onClick={() => handleModuleClick(module)}
-            >
-              Module {module.id}
-            </div>
-          ))}
+        <div className={`timer ${timer < 60 ? 'warning' : ''}`}>
+          Temps restant: {formatTime(timer)}
         </div>
-        {selectedModule && (
-          <div className="module-controls">
-            {selectedModule.type === 'Fils' && (
-              <div className="wires">
-                {selectedModule.state.wires.map((wire, index) => (
-                  <button
-                    key={index}
-                    className={`wire ${wire.color} ${wire.isCut ? 'cut' : ''}`}
-                    onClick={() => handleModuleAction({
-                      wires: selectedModule.state.wires.map((w, i) => 
-                        i === index ? { ...w, isCut: true } : w
-                      )
-                    })}
-                  />
-                ))}
-              </div>
-            )}
-            {selectedModule.type === 'Bouton' && (
-              <button
-                className={`bomb-button ${selectedModule.state.isPressed ? 'pressed' : ''}`}
-                onMouseDown={() => handleModuleAction({ isPressed: true })}
-                onMouseUp={() => handleModuleAction({ isPressed: false })}
-              >
-                Maintenir
-              </button>
-            )}
-            {selectedModule.type === 'Code' && (
-              <div className="code-input">
-                <input
-                  type="text"
-                  maxLength="4"
-                  value={selectedModule.state.enteredCode}
-                  onChange={(e) => handleModuleAction({ enteredCode: e.target.value })}
-                />
-              </div>
-            )}
+        
+        {gameState.gameStatus === 'won' && (
+          <div className="game-status won">
+            <h2>Félicitations ! La bombe a été désamorcée !</h2>
           </div>
+        )}
+        
+        {gameState.gameStatus === 'lost' && (
+          <div className="game-status lost">
+            <h2>Game Over ! {gameState.errorMessage}</h2>
+          </div>
+        )}
+
+        {gameState.gameStatus === 'playing' && (
+          <>
+            <div className="modules">
+              {gameState.modules.map(module => (
+                <div
+                  key={module.id}
+                  className={`module ${selectedModule?.id === module.id ? 'selected' : ''} ${module.isSolved ? 'solved' : ''}`}
+                  onClick={() => handleModuleClick(module)}
+                >
+                  Module {module.id}
+                </div>
+              ))}
+            </div>
+
+            {selectedModule && (
+              <div className="module-controls">
+                {selectedModule.type === 'Fils' && (
+                  <div className="wires">
+                    {selectedModule.state.wires.map((wire, index) => (
+                      <button
+                        key={index}
+                        className={`wire ${wire.color} ${wire.isCut ? 'cut' : ''}`}
+                        onClick={() => handleWireCut(index)}
+                        disabled={wire.isCut}
+                      />
+                    ))}
+                  </div>
+                )}
+                {selectedModule.type === 'Bouton' && (
+                  <button
+                    className={`bomb-button ${selectedModule.state.isPressed ? 'pressed' : ''}`}
+                    onMouseDown={handleButtonPress}
+                    onMouseUp={handleButtonRelease}
+                    onMouseLeave={handleButtonRelease}
+                  >
+                    Maintenir
+                  </button>
+                )}
+                {selectedModule.type === 'Code' && (
+                  <div className="code-input">
+                    <input
+                      type="text"
+                      maxLength="4"
+                      value={selectedModule.state.enteredCode}
+                      onChange={(e) => handleCodeInput(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
